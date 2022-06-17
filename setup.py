@@ -11,7 +11,8 @@ with open(os.path.join(here, 'README.md'), 'r') as mdFile:
 setup(
     name='picutils', 
     version='0.0.1', 
-    packages=setuptools.find_packages(), 
+    package_dir={'': 'picutils'}, 
+    packages=setuptools.find_packages(where='picutils'), 
     url='https://blog.picpic.site', 
     license='MIT', 
     author='PIC', 
@@ -19,5 +20,11 @@ setup(
     description='a dibr torch lib', 
     long_description=long_description, 
     long_description_content_type="text/markdown",
-    python_requires=">=3.7, <4"
+    python_requires=">=3.8, <4", 
+    install_requires=[
+        'numpy>=1.22.3', 
+        'opencv-python>=4.5.5.64', 
+        'plyfile>=0.7.4', 
+        'torch>=1.11.0'
+    ]
 )
