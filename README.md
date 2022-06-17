@@ -1,7 +1,7 @@
 # PIC DIBR utils
 
 ## install
-download release `.tar.gz` file
+download released `.tar.gz` file from [github](https://github.com/picpic2013/picutils/releases/tag/v0.0.1)
 ~~~ shell
 cd ${PATH_OF_THE_TAR_FILE}
 pip install picutils-0.0.1.tar.gz
