@@ -11,8 +11,9 @@ with open(os.path.join(here, 'README.md'), 'r') as mdFile:
 setup(
     name='picutils', 
     version='0.0.1', 
-    package_dir={'': 'picutils'}, 
-    packages=setuptools.find_packages(where='picutils'), 
+    # package_dir={'': 'picutils'}, 
+    # packages=setuptools.find_packages(), 
+    packages=['picutils', 'picutils.googleutils'], 
     url='https://blog.picpic.site', 
     license='MIT', 
     author='PIC', 
