@@ -98,7 +98,7 @@ def batchWarping(
     B, N, NP, H, W, _ = grid.shape
     _, _, C, HS, WS = srcImgs.shape
 
-    grid = grid.view(B * N * NP, H, W, _)
+    grid = grid.view(B * N * NP, H, W, 2)
 
     # apply gird_sample
     warppedImg = torch.nn.functional.grid_sample(srcImgs.view(B * N, C, HS, WS).repeat(NP, 1, 1, 1), grid, mode, padding_mode, align_corners)
@@ -124,7 +124,7 @@ def enhancedBatchWarping(refCam: List[MyPerspectiveCamera], # len(refCam) : B
     B, N, NP, H, W, _ = grid.shape
     _, _, C, HS, WS = srcImgs.shape
 
-    grid = grid.view(B * N * NP, H, W, _)
+    grid = grid.view(B * N * NP, H, W, 2)
 
     warppedImg = myEnhancedGridSample(srcImgs.view(B * N, C, HS, WS).repeat(NP, 1, 1, 1), grid)
 
