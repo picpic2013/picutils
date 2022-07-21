@@ -11,9 +11,8 @@ def generatePointCloud(img: torch.Tensor, dep: torch.Tensor, cam: MyPerspectiveC
     '''
     @param img:  [h, w, 3] (RGB)
     @param dep:  [h, w]    (float32)
-    @param intr: [3, 3]
-    @param extr: [4, 4]    Xc = extr @ Xw
-    @param mask: [h, w]    (boolean)
+    @param cam:  MyPerspectiveCamera
+    @param mask: torch.Tensor | None
     '''
 
     device = dep.device
