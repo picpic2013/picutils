@@ -52,7 +52,14 @@ class ConsistancyChecker:
     def getMeanCorrectDepth(cams: List[MyPerspectiveCamera], dMaps: List[torch.Tensor], 
         pix_thre: float, dep_thre: float, view_thre: float, absoluteDepth: bool=False, grid_sample_mode='bilinear', 
         grid_sample_padding_mode='zeros', grid_sample_align_corners=False) -> Tuple[torch.Tensor]:
-        
+        '''
+        @param cams:      len(cams) = view_num
+        @param dMaps:     dMaps[i].shape = [ H x W ]
+        @param pix_thre:  pixel threshold ( mask[reprojected pixel diff > pix_thre] = 0
+        @param dep_thre:  mask[reprojected depth diff > dep_thre] = 0
+        @param view_thre: mask[number of cams that seen the point < view_thre] = 0
+        @param absoluteDepth: if true, [reprojected depth diff] /= raw_depth
+        '''
         for refIdx, (refCam, refDMap) in enumerate(zip(cams, dMaps)):
             geo_mask_sum = 0
             all_srcview_depth_ests = []
