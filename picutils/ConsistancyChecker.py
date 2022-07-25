@@ -55,7 +55,7 @@ class ConsistancyChecker:
         '''
         @param cams:      len(cams) = view_num
         @param dMaps:     dMaps[i].shape = [ H x W ]
-        @param pix_thre:  pixel threshold ( mask[reprojected pixel diff > pix_thre] = 0
+        @param pix_thre:  mask[reprojected pixel diff > pix_thre] = 0
         @param dep_thre:  mask[reprojected depth diff > dep_thre] = 0
         @param view_thre: mask[number of cams that seen the point < view_thre] = 0
         @param absoluteDepth: if false, [reprojected depth diff] /= raw_depth
