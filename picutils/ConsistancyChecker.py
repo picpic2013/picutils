@@ -124,10 +124,10 @@ class ConsistancyChecker:
         grid = cams[0][0].uv_grid.view(1, 1, 2, H, W).repeat(B, V, 1, 1 ,1) # B x V x 2 x H x W
         grid = grid.view(B * V, 2, H * W)                                   # (B * V) x 2 x (H * W)
 
-        v_posture = posture.view(B, V, 1, 4, 4).repeat(1, 1, V, 1, 1).permute(1, 0, 2, 3, 4).reshape(V * B * V, 4, 4)         # (V_src * B * V_ref) x 4 x 4
-        v_posture_inv = posture_inv.view(B, V, 1, 4, 4).repeat(1, 1, V, 1, 1).permute(1, 0, 2, 3, 4).reshape(V * B * V, 4, 4) # (V_src * B * V_ref) x 4 x 4
-        v_k = k.view(B, V, 1, 3, 3).repeat(1, 1, V, 1, 1).permute(1, 0, 2, 3, 4).reshape(V * B * V, 3, 3)                     # (V_src * B * V_ref) x 3 x 3
-        v_k_inv = k_inv.view(B, V, 1, 3, 3).repeat(1, 1, V, 1, 1).permute(1, 0, 2, 3, 4).reshape(V * B * V, 3, 3)             # (V_src * B * V_ref) x 3 x 3
+        v_posture = posture.repeat(V, 1, 1)         # (V_src * B * V_ref) x 4 x 4
+        v_posture_inv = posture_inv.repeat(V, 1, 1) # (V_src * B * V_ref) x 4 x 4
+        v_k = k.repeat(V, 1, 1)                     # (V_src * B * V_ref) x 3 x 3
+        v_k_inv = k_inv.repeat(V, 1, 1)             # (V_src * B * V_ref) x 3 x 3
         v_oneTensor = oneTensor.repeat(V, 1, 1)     # (V_src * B * V_ref) x 1 x (H * W)
         v_zeroTensor = zeroTensor.repeat(V, 1, 1)   # (V_src * B * V_ref) x 1 x (H * W)
         
@@ -141,7 +141,8 @@ class ConsistancyChecker:
         # calculate world points
         #               [ (B * V) x 4 x 1 ]     [ (B * V) x 4 x (H * W) ] [ (B * V), 1, (H * W) ]
         ref_XYZ_World = dstCameraAnchorPoint4 + directionVectorU2World4 * dMaps.view(B * V, 1, H * W) # (B * V) x 4 x (H * W)
-        ref_XYZ_World = ref_XYZ_World.repeat(V, 1, 1) # (V_src * B * V_ref) x 4 x (H * W)
+        ref_XYZ_World = ref_XYZ_World.view(B, V, 1, 4, H * W).repeat(1, 1, V, 1, 1)       # B x V_ref x V_src x 4 x (H * W)
+        ref_XYZ_World = ref_XYZ_World.permute(1, 0, 2, 3, 4).reshape(V * B * V, 4, H * W) # (V_src * B * V_ref) x 4 x (H * W)
 
         # project to src cameras
         src_XYZ_camera = torch.bmm(v_posture, ref_XYZ_World)           # (V_src * B * V_ref) x 4 x (H * W)
