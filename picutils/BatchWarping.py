@@ -106,7 +106,7 @@ def batchWarping(
     grid = grid.view(B * N * NP, H, W, 2)
 
     # apply gird_sample
-    warppedImg = torch.nn.functional.grid_sample(srcImgs.unsqueeze(2).expand(B, N, NP, C, HS, WS).view(B * N * NP, C, HS, WS), grid, mode, padding_mode, align_corners)
+    warppedImg = torch.nn.functional.grid_sample(srcImgs.unsqueeze(2).expand(B, N, NP, C, HS, WS).reshape(B * N * NP, C, HS, WS), grid, mode, padding_mode, align_corners)
     
     return warppedImg.view(B, N, NP, C, H, W)
 
