@@ -58,7 +58,7 @@ class ConsistancyChecker:
         @param pix_thre:  pixel threshold ( mask[reprojected pixel diff > pix_thre] = 0
         @param dep_thre:  mask[reprojected depth diff > dep_thre] = 0
         @param view_thre: mask[number of cams that seen the point < view_thre] = 0
-        @param absoluteDepth: if true, [reprojected depth diff] /= raw_depth
+        @param absoluteDepth: if false, [reprojected depth diff] /= raw_depth
         '''
         for refIdx, (refCam, refDMap) in enumerate(zip(cams, dMaps)):
             geo_mask_sum = 0
