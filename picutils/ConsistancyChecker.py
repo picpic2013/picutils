@@ -1,6 +1,4 @@
-from requests import delete
 import torch
-import numpy as np
 from typing import Tuple, List
 
 from picutils.MyPerspectiveCamera import MyPerspectiveCamera
