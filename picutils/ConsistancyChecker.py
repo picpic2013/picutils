@@ -115,21 +115,22 @@ class ConsistancyChecker:
         k = torch.stack([torch.stack([cam.k for cam in camList]) for camList in cams])                     # B x V x 3 x 3
         k_inv = torch.stack([torch.stack([cam.k_inv for cam in camList]) for camList in cams])             # B x V x 3 x 3
 
-        posture = posture.view(B * V, 4, 4).float()         # (B * V) x 4 x 4
-        posture_inv = posture_inv.view(B * V, 4, 4).float() # (B * V) x 4 x 4
-        k = k.view(B * V, 3, 3).float()                     # (B * V) x 3 x 3
-        k_inv = k_inv.view(B * V, 3, 3).float()             # (B * V) x 3 x 3
+        posture = posture.view(B * V, 4, 4).type(dtype)         # (B * V) x 4 x 4
+        posture_inv = posture_inv.view(B * V, 4, 4).type(dtype) # (B * V) x 4 x 4
+        k = k.view(B * V, 3, 3).type(dtype)                     # (B * V) x 3 x 3
+        k_inv = k_inv.view(B * V, 3, 3).type(dtype)             # (B * V) x 3 x 3
 
         # project points
         grid = cams[0][0].uv_grid.view(1, 1, 2, H, W).repeat(B, V, 1, 1 ,1) # B x V x 2 x H x W
         grid = grid.view(B * V, 2, H * W)                                   # (B * V) x 2 x (H * W)
+        v_grid = grid.repeat(V, 1, 1)
 
-        v_posture = posture.repeat(V, 1, 1)         # (V_src * B * V_ref) x 4 x 4
-        v_posture_inv = posture_inv.repeat(V, 1, 1) # (V_src * B * V_ref) x 4 x 4
-        v_k = k.repeat(V, 1, 1)                     # (V_src * B * V_ref) x 3 x 3
-        v_k_inv = k_inv.repeat(V, 1, 1)             # (V_src * B * V_ref) x 3 x 3
-        v_oneTensor = oneTensor.repeat(V, 1, 1)     # (V_src * B * V_ref) x 1 x (H * W)
-        v_zeroTensor = zeroTensor.repeat(V, 1, 1)   # (V_src * B * V_ref) x 1 x (H * W)
+        v_posture = posture.view(B, V, 1, 4, 4).repeat(1, 1, V, 1, 1)         # B x V_src x V_ref x 4 x 4
+        v_posture_inv = posture_inv.view(B, V, 1, 4, 4).repeat(1, 1, V, 1, 1) # B x V_src x V_ref x 4 x 4
+        v_k = k.view(B, V, 1, 3, 3).repeat(1, 1, V, 1, 1)                     # B x V_src x V_ref x 3 x 3
+        v_k_inv = k_inv.view(B, V, 1, 3, 3).repeat(1, 1, V, 1, 1)             # B x V_src x V_ref x 3 x 3
+        v_oneTensor = oneTensor.repeat(V, 1, 1)     # (B * V_src * V_ref) x 1 x (H * W)
+        v_zeroTensor = zeroTensor.repeat(V, 1, 1)   # (B * V_src * V_ref) x 1 x (H * W)
         
         ref_Dir_XYZ_Picture = torch.cat([grid, oneTensor], dim=1)  # (B * V) x 3 x (H * W)
         ref_Dir_XYZ_Camera = torch.bmm(k_inv, ref_Dir_XYZ_Picture) # (B * V) x 3 x (H * W)
@@ -142,24 +143,24 @@ class ConsistancyChecker:
         #               [ (B * V) x 4 x 1 ]     [ (B * V) x 4 x (H * W) ] [ (B * V), 1, (H * W) ]
         ref_XYZ_World = dstCameraAnchorPoint4 + directionVectorU2World4 * dMaps.view(B * V, 1, H * W) # (B * V) x 4 x (H * W)
         ref_XYZ_World = ref_XYZ_World.view(B, V, 1, 4, H * W).repeat(1, 1, V, 1, 1)       # B x V_ref x V_src x 4 x (H * W)
-        ref_XYZ_World = ref_XYZ_World.permute(1, 0, 2, 3, 4).reshape(V * B * V, 4, H * W) # (V_src * B * V_ref) x 4 x (H * W)
+        ref_XYZ_World = ref_XYZ_World.reshape(B * V * V, 4, H * W) # (B * V_src * V_ref) x 4 x (H * W)
 
         # project to src cameras
-        src_XYZ_camera = torch.bmm(v_posture, ref_XYZ_World)           # (V_src * B * V_ref) x 4 x (H * W)
-        src_XYZ_camera = src_XYZ_camera[:, :3, :]                      # (V_src * B * V_ref) x 3 x (H * W)
-        src_XYZ_picture = torch.bmm(v_k, src_XYZ_camera)               # (V_src * B * V_ref) x 3 x (H * W)
-        src_XYZ_picture = src_XYZ_picture[:, :2, :] / (src_XYZ_picture[:, 2:3, :] + eps) # (V_src * B * V_ref) x 2 x (H * W)
-        src_XYZ_picture = src_XYZ_picture.view(V * B * V, 2, H, W)                       # (V_src * B * V_ref) x 2 x H x W
-        src_XYZ_picture = src_XYZ_picture.permute(0, 2, 3, 1)                            # (V_src * B * V_ref) x H x W x 2
+        src_XYZ_camera = torch.bmm(v_posture.permute(0, 2, 1, 3, 4).reshape(B * V * V, 4, 4), ref_XYZ_World)           # (B * V_src * V_ref) x 4 x (H * W)
+        src_XYZ_camera = src_XYZ_camera[:, :3, :]                      # (B * V_src * V_ref) x 3 x (H * W)
+        src_XYZ_picture = torch.bmm(v_k.permute(0, 2, 1, 3, 4).reshape(B * V * V, 3, 3), src_XYZ_camera)               # (B * V_src * V_ref) x 3 x (H * W)
+        src_XYZ_picture = src_XYZ_picture[:, :2, :] / (src_XYZ_picture[:, 2:3, :] + eps) # (B * V_src * V_ref) x 2 x (H * W)
+        grid = src_XYZ_picture
+        src_XYZ_picture = src_XYZ_picture.view(B * V * V, 2, H, W)                       # (B * V_src * V_ref) x 2 x H x W
+        src_XYZ_picture = src_XYZ_picture.permute(0, 2, 3, 1)                            # (B * V_src * V_ref) x H x W x 2
 
         # calculate grid
-        grid_norm = src_XYZ_picture / normalize_base.expand(V * B * V, H, W, 2) - 1.          # (V_src * B * V_ref) x H x W x 2
+        grid_norm = src_XYZ_picture / normalize_base.view(1, 1, 1, 2).expand(B * V * V, H, W, 2) - 1.     # (B * V_src * V_ref) x H x W x 2
 
-        v_dMaps = dMaps.view(B * V, 1, H, W).repeat(V, 1, 1, 1) # (V_src * B * V_ref) x 1 x H x W
-        src_dMaps = torch.nn.functional.grid_sample(v_dMaps, grid_norm, grid_sample_mode, grid_sample_padding_mode, grid_sample_align_corners) # (V_src * B * V_ref) x 1 x H x W
-
-        # project points
-        grid = grid.repeat(V, 1, 1) # (V_src * B * V_ref) x 2 x (H * W)
+        src_dMaps = torch.nn.functional.grid_sample(
+            dMaps.view(B, 1, V, 1, H, W).repeat(1, V, 1, 1, 1, 1).view(B * V * V, 1, H, W), 
+            grid_norm, grid_sample_mode, grid_sample_padding_mode, grid_sample_align_corners
+        ) # (B * V_src * V_ref) x 1 x H x W
 
         del oneTensor
         del zeroTensor
@@ -177,42 +178,44 @@ class ConsistancyChecker:
         del src_XYZ_picture
         del grid_norm
         
-        ref_Dir_XYZ_Picture = torch.cat([grid, v_oneTensor], dim=1)  # (V_src * B * V_ref) x 3 x (H * W)
-        ref_Dir_XYZ_Camera = torch.bmm(v_k_inv, ref_Dir_XYZ_Picture) # (V_src * B * V_ref) x 3 x (H * W)
+        # project points
+        ref_Dir_XYZ_Picture = torch.cat([grid, v_oneTensor], dim=1)  # (B * V_src * V_ref) x 3 x (H * W)
+        ref_Dir_XYZ_Camera = torch.bmm(v_k_inv.permute(0, 2, 1, 3, 4).reshape(B * V * V, 3, 3), ref_Dir_XYZ_Picture) # (B * V_src * V_ref) x 3 x (H * W)
 
-        dstCameraAnchorPoint4 = torch.bmm(v_posture_inv, tensor0001.view(1, 4, 1).repeat(V * B * V, 1, 1)) # (V_src * B * V_ref) x 4 x 1
+        dstCameraAnchorPoint4 = torch.bmm(v_posture_inv.permute(0, 2, 1, 3, 4).reshape(B * V * V, 4, 4), tensor0001.view(1, 4, 1).repeat(B * V * V, 1, 1)) # (B * V_src * V_ref) x 4 x 1
         directionVectorU2Camera4 = torch.cat([ref_Dir_XYZ_Camera, v_zeroTensor], dim=1)                    # (V_src * B * V_ref) x 4 x (H * W)
-        directionVectorU2World4 = torch.bmm(v_posture_inv, directionVectorU2Camera4)                       # (V_src * B * V_ref) x 4 x (H * W)
+        directionVectorU2World4 = torch.bmm(v_posture_inv.permute(0, 2, 1, 3, 4).reshape(B * V * V, 4, 4), directionVectorU2Camera4)                       # (B * V_src * V_ref) x 4 x (H * W)
 
         # calculate world points
-        #               [ (VBV) x 4 x 1 ]       [ (VBV) x 4 x (H * W) ]   [ (VBV), 1, (H * W) ]
-        ref_XYZ_World = dstCameraAnchorPoint4 + directionVectorU2World4 * src_dMaps.view(V * B * V, 1, H * W) # (V_src * B * V_ref) x 4 x (H * W)
+        #               [ (BVV) x 4 x 1 ]       [ (BVV) x 4 x (H * W) ]   [ (BVV) x 1 x (H * W) ]
+        ref_XYZ_World = dstCameraAnchorPoint4 + directionVectorU2World4 * src_dMaps.view(B * V * V, 1, H * W) # (B * V_src * V_ref) x 4 x (H * W)
 
         # project to src cameras
-        src_XYZ_camera = torch.bmm(v_posture, ref_XYZ_World)           # (V_src * B * V_ref) x 4 x (H * W)
-        src_XYZ_camera = src_XYZ_camera[:, :3, :]                      # (V_src * B * V_ref) x 3 x (H * W)
-        src_XYZ_picture = torch.bmm(v_k, src_XYZ_camera)               # (V_src * B * V_ref) x 3 x (H * W)
+        src_XYZ_camera = torch.bmm(v_posture.view(B * V * V, 4, 4), ref_XYZ_World)       # (B * V_src * V_ref) x 4 x (H * W)
+        src_XYZ_camera = src_XYZ_camera[:, :3, :]                                        # (B * V_src * V_ref) x 3 x (H * W)
+        src_XYZ_picture = torch.bmm(v_k.view(B * V * V, 3, 3), src_XYZ_camera)           # (B * V_src * V_ref) x 3 x (H * W)
 
-        reproject_dMaps =  src_XYZ_picture[:, 2:3, :]                  # (V_src * B * V_ref) x 1 x (H * W)
-        src_XYZ_picture = src_XYZ_picture[:, :2, :] / (src_XYZ_picture[:, 2:3, :] + eps) # (V_src * B * V_ref) x 2 x (H * W)
+        reproject_dMaps =  src_XYZ_picture[:, 2:3, :]                                    # (B * V_src * V_ref) x 1 x (H * W)
+        src_XYZ_picture = src_XYZ_picture[:, :2, :] / (src_XYZ_picture[:, 2:3, :] + eps) # (B * V_src * V_ref) x 2 x (H * W)
 
         # build mask
-        dist = ((src_XYZ_picture - grid)**2).sum(dim=1).unsqueeze(1)**0.5        # (V_src * B * V_ref) x 1 x (H * W)
-        depth_diff = (reproject_dMaps - v_dMaps.view(V * B * V, 1, H * W)).abs() # (V_src * B * V_ref) x 1 x (H * W)
+        dist = ((src_XYZ_picture - v_grid)**2).sum(dim=1).unsqueeze(1)**0.5        # (B * V_src * V_ref) x 1 x (H * W)
+        v_dMaps = dMaps.view(B, V, 1, H * W).repeat(1, 1, V, 1).permute(1, 0, 2, 3).reshape(B * V * V, 1, H * W)
+        depth_diff = (reproject_dMaps - v_dMaps).abs() # (B * V_src * V_ref) x 1 x (H * W)
         if absoluteDepth:
             relative_depth_diff = depth_diff
         else:
-            relative_depth_diff = depth_diff / (v_dMaps.view(V * B * V, 1, H * W).abs() + eps)
+            relative_depth_diff = depth_diff / (v_dMaps.abs() + eps)
 
-        mask = (dist < pix_thre) & (relative_depth_diff < dep_thre) # (V_src * B * V_ref) x 1 x (H * W)
+        mask = (dist < pix_thre) & (relative_depth_diff < dep_thre) # (B * V_src * V_ref) x 1 x (H * W)
         reproject_dMaps[~mask] = 0
 
         # build better depth
-        mask = mask.view(V, B, V, H, W).permute(1, 0, 2, 3, 4)                        # B x V_src x V_ref x H x W
-        reproject_dMaps = reproject_dMaps.view(V, B, V, H, W).permute(1, 0, 2, 3, 4)  # B x V_src x V_ref x H x W
+        mask = mask.view(B, V, V, H, W)                        # B x V_src x V_ref x H x W
+        reproject_dMaps = reproject_dMaps.view(B, V, V, H, W)  # B x V_src x V_ref x H x W
 
-        geo_mask_sum = mask.int().sum(dim=1)         # B x V_ref x H x W
-        reproject_dMaps = reproject_dMaps.sum(dim=1) # B x V_ref x H x W
-        reproject_dMaps = reproject_dMaps / geo_mask_sum
-        
-        return reproject_dMaps, mask.sum(dim=1) >= view_thre + 1
+        geo_mask_sum = mask.sum(dim=2)               # B x V_ref x H x W
+        reproject_dMaps = reproject_dMaps.sum(dim=2) # B x V_ref x H x W
+        reproject_dMaps = reproject_dMaps / (geo_mask_sum + eps)
+
+        return reproject_dMaps, geo_mask_sum > view_thre
