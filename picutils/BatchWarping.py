@@ -4,7 +4,7 @@ import torch
 from picutils.MyPerspectiveCamera import MyPerspectiveCamera
 from picutils.MyGridSample import grid_sample as myEnhancedGridSample
 
-def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPerspectiveCamera]], normalize=False) -> Tuple[torch.Tensor, torch.Tensor]:
+def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPerspectiveCamera]], normalize=True) -> Tuple[torch.Tensor, torch.Tensor]:
     '''
     @return basePoint_src, direction_src [B x V x 3 x H x W]
     '''
@@ -67,7 +67,8 @@ def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
     srcCams: List[List[MyPerspectiveCamera]],           # len(srcCams) : B && len(srcCams[0]) : N
     refDep: torch.Tensor,                               # [ B x n_plane x H x W ] | [ B x n_plane ]
     srcImgs: torch.Tensor,                              # [ B x n_view x channel x Hsrc x Wsrc]
-    eps:float=1e-8):
+    eps:float=1e-8, 
+    lineParam=None):
     '''
     @param refCam:  len(refCam) : B
     @param refCam:  len(srcCams) : B && len(srcCams[0]) : N
@@ -80,7 +81,10 @@ def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
         refDep = refDep.unsqueeze(2).unsqueeze(2)
         refDep = refDep.repeat(1, 1, refCam[0].imgH, refCam[0].imgW)
 
-    basePoint_src, direction_src = getWarppingLine(refCam, srcCams, normalize=True)
+    if lineParam is None:
+        basePoint_src, direction_src = getWarppingLine(refCam, srcCams, normalize=True)
+    else:
+        basePoint_src, direction_src = lineParam
     B, V, _, H, W = basePoint_src.shape
     D = refDep.size(1)
 
@@ -99,7 +103,8 @@ def batchWarping(
     eps:float=1e-8, 
     mode:str='bilinear', 
     padding_mode:str='zeros', 
-    align_corners:bool=False):
+    align_corners:bool=False, 
+    lineParam=None):
     '''
     @param refCam:  len(refCam) : B
     @param refCam:  len(srcCams) : B && len(srcCams[0]) : N
@@ -109,7 +114,7 @@ def batchWarping(
     @returns warpped src img (ref_hat) [ B x N x n_plane x C x H x W ]
     '''
 
-    grid = getWarppingGrid(refCam, srcCams, refDep, srcImgs, eps)
+    grid = getWarppingGrid(refCam, srcCams, refDep, srcImgs, eps, lineParam)
     B, N, NP, H, W, _ = grid.shape
     _, _, C, HS, WS = srcImgs.shape
     dtype = refDep.dtype

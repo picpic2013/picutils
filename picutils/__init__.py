@@ -6,4 +6,4 @@ from picutils.RecursiveWarper import make_recursive_func, make_multi_return_recu
 from picutils.ConsistancyChecker import ConsistancyChecker
 from picutils.PointCloudUtils import generatePointCloud, savePointCloud
 from picutils.MyGridSample import grid_sample as myEnhancedGridSample
-from picutils.BatchWarping import getWarppingGrid, batchWarping, enhancedBatchWarping
+from picutils.BatchWarping import getWarppingLine, getWarppingGrid, batchWarping, enhancedBatchWarping
