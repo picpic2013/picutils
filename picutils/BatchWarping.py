@@ -58,8 +58,8 @@ def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPers
         WS = srcCams[0][0].imgW
         normalize_base = torch.tensor([WS, HS], dtype=dtype, device=device) * 0.5
         normalize_base = normalize_base.view(1, 1, 2, 1, 1)
-        basePoint_src[:,:,:2,:,:] = basePoint_src[:,:,:2,:,:] / normalize_base - 1.
-        direction_src[:,:,:2,:,:] = direction_src[:,:,:2,:,:] / normalize_base - 1.
+        basePoint_src[:,:,:2,:,:] = basePoint_src[:,:,:2,:,:] / normalize_base
+        direction_src[:,:,:2,:,:] = direction_src[:,:,:2,:,:] / normalize_base
 
     return basePoint_src[:,:,:3,:,:], direction_src[:,:,:3,:,:]
 
@@ -76,14 +76,11 @@ def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
 
     @returns warpped src grid (ref_hat) [ B, N, NP, H, W, 2 ]
     '''
-    B, N, C, HS, WS = srcImgs.shape
-    device = refDep.device
-    dtype = refDep.dtype
     if len(refDep.shape) == 2:
         refDep = refDep.unsqueeze(2).unsqueeze(2)
         refDep = refDep.repeat(1, 1, refCam[0].imgH, refCam[0].imgW)
 
-    basePoint_src, direction_src = getWarppingLine(refCam, srcCams, normalize=False)
+    basePoint_src, direction_src = getWarppingLine(refCam, srcCams, normalize=True)
     B, V, _, H, W = basePoint_src.shape
     D = refDep.size(1)
 
@@ -91,10 +88,7 @@ def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
     grid = grid[:,:,:,:2,:,:] / (grid[:,:,:,2:,:,:] + eps)
     grid = grid.permute(0, 1, 2, 4, 5, 3)
 
-    normalize_base = torch.tensor([WS, HS], dtype=dtype, device=device) * 0.5
-    normalize_base = normalize_base.view(1, 1, 1, 1, 1, 2)
-
-    return grid.view(B, V, D, H, W, 2) / normalize_base - 1.
+    return grid.view(B, V, D, H, W, 2) - 1.
 
 
 def batchWarping(
