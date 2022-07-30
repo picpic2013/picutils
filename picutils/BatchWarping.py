@@ -4,8 +4,61 @@ import torch
 from picutils.MyPerspectiveCamera import MyPerspectiveCamera
 from picutils.MyGridSample import grid_sample as myEnhancedGridSample
 
+def getWarppingLine_raw(ref_R_inv: torch.Tensor, ref_K_inv: torch.Tensor, src_R: torch.Tensor, src_K: torch.Tensor, grid: torch.Tensor):
+    '''
+    @param ref_R: [B x 4 x 4]
+    @param ref_K: [B x 3 x 3]
+    @param src_R: [B x V x 4 x 4]
+    @param src_K: [B x V x 3 x 3]
+    @param grid:  [B x 2 x ?] | [2 x ?] (u, v)
+
+    @return basePoint_src, direction_src [B x V x 3 x ?]
+    '''
+
+    B, V, _, _ = src_R.shape
+    if len(grid.shape) == 2:
+        grid = grid.unsqueeze(0).repeat(B, 1, 1)
+    HW = grid.size(2)
+    device = src_R.device
+    dtype = src_R.dtype
+
+    if grid.dtype != dtype:
+        grid = grid.type(dtype)
+    
+    refPosture_inv = ref_R_inv.unsqueeze(1).repeat(1, V, 1, 1)                          # B x V x 4 x 4
+    refK_inv = torch.eye(4, device=device, dtype=dtype).view(1, 4, 4).repeat(B, 1, 1)
+    refK_inv[:, :3, :3] = ref_K_inv
+    refK_inv = refK_inv.unsqueeze(1).repeat(1, V, 1, 1)                                 # B x V x 4 x 4
+
+    srcPosture = src_R
+    srcK = torch.eye(4, device=device, dtype=dtype).view(1, 1, 4, 4).repeat(B, V, 1, 1)
+    srcK[:, :, :3, :3] = src_K                                                          # B x V x 4 x 4
+
+    KRRK = torch.bmm(refPosture_inv.view(B * V, 4, 4), refK_inv.view(B * V, 4, 4))
+    KRRK = torch.bmm(srcPosture.view(B * V, 4, 4), KRRK)
+    KRRK = torch.bmm(srcK.view(B * V, 4, 4), KRRK) # (B * V) x 4 x 4
+
+    refGrid = grid                                                                      # B x 2 x H x W => B x 2 x (H * W)
+    # (B * V) x 4 x (H * W) ,,  [ u, v, 1, 0 ]
+    direction_ref = torch.zeros(B, 1, 4, HW, device=device, dtype=dtype)
+    direction_ref[:,:,:2,:] = refGrid
+    direction_ref[:,:,2,:] = 1
+    direction_ref = direction_ref.repeat(1, V, 1, 1).view(B * V, 4, HW)
+
+    # (B * V) x 4 x (H * W) ,,  [ 0, 0, 0, 1 ]
+    basePoint_ref = torch.zeros(B, 1, 4, HW, device=device, dtype=dtype)
+    basePoint_ref[:,:,3,:] = 1
+    basePoint_ref = basePoint_ref.repeat(1, V, 1, 1).view(B * V, 4, HW)
+
+    basePoint_src = torch.bmm(KRRK, basePoint_ref).view(B, V, 4, HW)
+    direction_src = torch.bmm(KRRK, direction_ref).view(B, V, 4, HW)
+
+    return basePoint_src[:,:,:3,:], direction_src[:,:,:3,:]
+
+
 def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPerspectiveCamera]], normalize=True) -> Tuple[torch.Tensor, torch.Tensor]:
     '''
+    @param normalize: if true, return value /= 0.5([WS, HS])
     @return basePoint_src, direction_src [B x V x 3 x H x W]
     '''
     B = len(refCam)
@@ -15,43 +68,16 @@ def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPers
     device = refCam[0].posture.device
     dtype = refCam[0].posture.dtype
 
-    # construct posture and K
-    refPosture_inv = torch.stack([cam.posture_inv for cam in refCam]).unsqueeze(1).repeat(1, V, 1, 1)  # B x V x 4 x 4
-    refK_inv = torch.eye(4, device=device, dtype=dtype).view(1, 4, 4).repeat(B, 1, 1)                  # B x 4 x 4
-    refK_inv[:, :3, :3] = torch.stack([cam.k_inv for cam in refCam])
-    refK_inv = refK_inv.unsqueeze(1).repeat(1, V, 1, 1)                                                # B x V x 4 x 4
+    basePoint_src, direction_src = getWarppingLine_raw(
+        torch.stack([cam.posture_inv for cam in refCam]), 
+        torch.stack([cam.k_inv for cam in refCam]), 
+        torch.stack([torch.stack([cam.posture for cam in camList]) for camList in srcCams]), 
+        torch.stack([torch.stack([cam.k for cam in camList]) for camList in srcCams]), 
+        refCam[0].uv_grid.view(2, H * W)
+    )
 
-    srcPosture = torch.stack([torch.stack([cam.posture for cam in camList]) for camList in srcCams])   # B x V x 4 x 4
-    srcK = torch.eye(4, device=device, dtype=dtype).view(1, 1, 4, 4).repeat(B, V, 1, 1)                # B x V x 4 x 4
-    srcK[:, :, :3, :3] = torch.stack([torch.stack([cam.k for cam in camList]) for camList in srcCams])
-
-    if refPosture_inv.dtype != dtype:
-        refPosture_inv = refPosture_inv.type(dtype)
-    if refK_inv.dtype != dtype:
-        refK_inv = refK_inv.type(dtype)
-    if srcPosture.dtype != dtype:
-        srcPosture = srcPosture.type(dtype)
-    if srcK.dtype != dtype:
-        srcK = srcK.type(dtype)
-
-    KRRK = torch.bmm(refPosture_inv.view(B * V, 4, 4), refK_inv.view(B * V, 4, 4))
-    KRRK = torch.bmm(srcPosture.view(B * V, 4, 4), KRRK)
-    KRRK = torch.bmm(srcK.view(B * V, 4, 4), KRRK) # (B * V) x 4 x 4
-
-    refGrid = refCam[0].uv_grid.unsqueeze(0).repeat(B, 1, 1, 1).view(B, 2, H * W) # B x 2 x H x W => B x 2 x (H * W)
-    # (B * V) x 4 x (H * W) ,,  [ u, v, 1, 0 ]
-    direction_ref = torch.zeros(B, 1, 4, H * W, device=device, dtype=dtype)
-    direction_ref[:,:,:2,:] = refGrid
-    direction_ref[:,:,2,:] = 1
-    direction_ref = direction_ref.repeat(1, V, 1, 1).view(B * V, 4, H * W)
-
-    # (B * V) x 4 x (H * W) ,,  [ 0, 0, 0, 1 ]
-    basePoint_ref = torch.zeros(B, 1, 4, H * W, device=device, dtype=dtype)
-    basePoint_ref[:,:,3,:] = 1
-    basePoint_ref = basePoint_ref.repeat(1, V, 1, 1).view(B * V, 4, H * W)
-
-    basePoint_src = torch.bmm(KRRK, basePoint_ref).view(B, V, 4, H, W)
-    direction_src = torch.bmm(KRRK, direction_ref).view(B, V, 4, H, W)
+    basePoint_src = basePoint_src.view(B, V, 3, H, W)
+    direction_src = direction_src.view(B, V, 3, H, W)
 
     if normalize:
         HS = srcCams[0][0].imgH
@@ -61,7 +87,7 @@ def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPers
         basePoint_src[:,:,:2,:,:] = basePoint_src[:,:,:2,:,:] / normalize_base
         direction_src[:,:,:2,:,:] = direction_src[:,:,:2,:,:] / normalize_base
 
-    return basePoint_src[:,:,:3,:,:], direction_src[:,:,:3,:,:]
+    return basePoint_src, direction_src
 
 def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
     srcCams: List[List[MyPerspectiveCamera]],           # len(srcCams) : B && len(srcCams[0]) : N
