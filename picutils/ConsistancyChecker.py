@@ -217,3 +217,137 @@ class ConsistancyChecker:
         reproject_dMaps = reproject_dMaps / (geo_mask_sum + eps)
 
         return reproject_dMaps, geo_mask_sum > view_thre
+
+class FastConsistancyChecker:
+    def __init__(self, cams: List[List[MyPerspectiveCamera]], 
+        pix_thre: float, dep_thre: float, view_thre: float, absoluteDepth: bool=False, eps=1e-8, 
+        grid_sample_mode='bilinear', grid_sample_padding_mode='zeros', grid_sample_align_corners=False) -> None:
+        '''
+        @param cams:      len(cams) = BatchSize && len(cams[i]) = view_num
+        @param pix_thre:  mask[reprojected pixel diff > pix_thre] = 0
+        @param dep_thre:  mask[reprojected depth diff > dep_thre] = 0
+        @param view_thre: mask[number of cams that seen the point < view_thre] = 0
+        @param absoluteDepth: if false, [reprojected depth diff] /= raw_depth
+        '''
+        self.cams = cams
+        self.pix_thre = pix_thre
+        self.dep_thre = dep_thre
+        self.view_thre = view_thre
+        self.absoluteDepth = absoluteDepth
+        self.eps = eps
+        self.grid_sample_mode = grid_sample_mode
+        self.grid_sample_padding_mode = grid_sample_padding_mode
+        self.grid_sample_align_corners = grid_sample_align_corners
+
+        # read info
+        self.device = cams[0][0].posture.device
+        self.dtype = cams[0][0].posture.dtype
+        self.B = len(cams)
+        self.V = len(cams[0])
+        self.H = cams[0][0].imgH
+        self.W = cams[0][0].imgW
+
+        # construct posture and K
+        posture = torch.stack([torch.stack([cam.posture for cam in camList]) for camList in cams])               # B x V x 4 x 4
+        posture_inv = torch.stack([torch.stack([cam.posture_inv for cam in camList]) for camList in cams])       # B x V x 4 x 4
+        k = torch.eye(4, device=self.device, dtype=self.dtype).view(1, 1, 4, 4).repeat(self.B, self.V, 1, 1)     # B x V x 4 x 4
+        k_inv = torch.eye(4, device=self.device, dtype=self.dtype).view(1, 1, 4, 4).repeat(self.B, self.V, 1, 1) # B x V x 4 x 4
+        k[:,:,:3,:3] = torch.stack([torch.stack([cam.k for cam in camList]) for camList in cams])
+        k_inv[:,:,:3,:3] = torch.stack([torch.stack([cam.k_inv for cam in camList]) for camList in cams])
+
+        posture = posture.unsqueeze(1).repeat(1, self.V, 1, 1, 1)         # B x V x V x 4 x 4
+        posture_inv = posture_inv.unsqueeze(1).repeat(1, self.V, 1, 1, 1) # B x V x V x 4 x 4
+        k = k.unsqueeze(1).repeat(1, self.V, 1, 1, 1)                     # B x V x V x 4 x 4
+        k_inv = k_inv.unsqueeze(1).repeat(1, self.V, 1, 1, 1)             # B x V x V x 4 x 4
+
+        # construct line cords
+        # (BVV) x 4 x 4
+        KRRK = torch.bmm(
+            posture_inv.permute(0, 2, 1, 3, 4).reshape(self.B * self.V * self.V, 4, 4), 
+            k_inv.permute(0, 2, 1, 3, 4).reshape(self.B * self.V * self.V, 4, 4)
+        )
+        KRRK = torch.bmm(posture.view(self.B * self.V * self.V, 4, 4), KRRK)
+        KRRK = torch.bmm(k.view(self.B * self.V * self.V, 4, 4), KRRK)
+        self.KRRK = KRRK.view(self.B, self.V, self.V, 4, 4) # BVV44
+        self.KRRK_inv = self.KRRK.permute(0, 2, 1, 3, 4).contiguous()
+
+        refGrid = cams[0][0].uv_grid.unsqueeze(0).repeat(self.B * self.V * self.V, 1, 1, 1).view(self.B * self.V * self.V, 2, self.H * self.W) # BVV x 2 x H x W => BVV x 2 x (H * W)
+        self.refGrid = refGrid
+        # (BVV) x 4 x (HW) ,,  [ u, v, 1, 0 ]
+        direction_ref = torch.zeros(self.B * self.V * self.V, 4, self.H * self.W, device=self.device, dtype=self.dtype)
+        direction_ref[:,:2,:] = refGrid
+        direction_ref[:,2,:] = 1
+        self.direction_ref = direction_ref
+
+        # (BVV) x 4 x (HW) ,,  [ 0, 0, 0, 1 ]
+        basePoint_ref = torch.zeros(self.B * self.V * self.V, 4, self.H * self.W, device=self.device, dtype=self.dtype)
+        basePoint_ref[:,3,:] = 1
+        self.basePoint_ref = basePoint_ref
+
+        basePoint_src = torch.bmm(KRRK, basePoint_ref).view(self.B, self.V, self.V, 4, self.H, self.W)[:,:,:,:3,:,:]
+        direction_src = torch.bmm(KRRK, direction_ref).view(self.B, self.V, self.V, 4, self.H, self.W)[:,:,:,:3,:,:]
+
+        HS = cams[0][0].imgH
+        WS = cams[0][0].imgW
+        normalize_base = torch.tensor([WS, HS], dtype=self.dtype, device=self.device) * 0.5
+        normalize_base = normalize_base.view(1, 1, 1, 2, 1, 1)
+        self.normalize_base = normalize_base
+        # basePoint_src[:,:,:,:2,:,:] = basePoint_src[:,:,:,:2,:,:] / normalize_base
+        # direction_src[:,:,:,:2,:,:] = direction_src[:,:,:,:2,:,:] / normalize_base
+
+        self.basePoint_src = basePoint_src
+        self.direction_src = direction_src
+
+    def getMeanCorrectDepth(self, dMaps: torch.Tensor):
+        '''
+        @param dMaps:     dMaps.shape = [ B x V x H x W ]
+
+        @return Tuple [ reproject_dMaps, mask ]
+            reproject_dMaps: [ B x V x H x W ]
+            mask:            [ B x V x H x W ]
+        '''
+
+        srcGrid = self.basePoint_src + self.direction_src * dMaps.view(self.B, self.V, 1, 1, self.H, self.W).repeat(1, 1, self.V, 1, 1, 1) # BVV3HW
+        srcGrid = srcGrid[:,:,:,:2,:,:] / (srcGrid[:,:,:,2:,:,:] + self.eps) # BVV2HW
+
+        srcGrids = srcGrid / self.normalize_base - 1.
+        srcGrids = srcGrids.permute(0, 1, 2, 4, 5, 3).reshape(self.B * self.V * self.V, self.H, self.W, 2)
+
+        if srcGrids.dtype != dMaps.dtype:
+            srcGrids = srcGrids.type(dMaps.dtype)
+        
+        srcDep = torch.nn.functional.grid_sample(
+            dMaps.view(self.B, 1, self.V, 1, self.H, self.W).repeat(1, self.V, 1, 1, 1, 1).view(self.B * self.V * self.V, 1, self.H, self.W), 
+            srcGrids, self.grid_sample_mode, self.grid_sample_padding_mode, self.grid_sample_align_corners
+        ) # (BVV)1HW
+
+        direction_ref = self.direction_ref.clone()
+        direction_ref[:,:2,:] = srcGrid.view(self.B * self.V * self.V, 2, self.H * self.W)
+        basePoint_src = torch.bmm(self.KRRK_inv.view(self.B * self.V * self.V, 4, 4), self.basePoint_ref)[:,:3,:] # (BVV)3(HW)
+        direction_src = torch.bmm(self.KRRK_inv.view(self.B * self.V * self.V, 4, 4), direction_ref)[:,:3,:]      # (BVV)3(HW)
+
+        refGrid = basePoint_src + direction_src * srcDep.view(self.B * self.V * self.V, 1, self.H * self.W)
+        reprojectDep = refGrid[:,2:,:] # (BVV)1(HW)
+        refGrids = refGrid[:,:2,:] / (reprojectDep + self.eps) # (BVV)2(HW)
+
+        # build mask
+        dist = ((refGrids - self.refGrid)**2).sum(dim=1).unsqueeze(1)**0.5        # (B * V_src * V_ref) x 1 x (H * W)
+        v_dMaps = dMaps.view(self.B, self.V, 1, self.H * self.W).repeat(1, 1, self.V, 1).view(self.B * self.V * self.V, 1, self.H * self.W)
+        depth_diff = (reprojectDep - v_dMaps).abs() # (B * V_src * V_ref) x 1 x (H * W)
+        if self.absoluteDepth:
+            relative_depth_diff = depth_diff
+        else:
+            relative_depth_diff = depth_diff / (v_dMaps.abs() + self.eps)
+
+        mask = (dist < self.pix_thre) & (relative_depth_diff < self.dep_thre) & (relative_depth_diff > 0) # (B * V_src * V_ref) x 1 x (H * W)
+        reprojectDep[~mask] = 0
+
+        # build better depth
+        mask = mask.view(self.B, self.V, self.V, self.H, self.W)                        # B x V_src x V_ref x H x W
+        reprojectDep = reprojectDep.view(self.B, self.V, self.V, self.H, self.W)  # B x V_src x V_ref x H x W
+
+        geo_mask_sum = mask.sum(dim=2)               # B x V_ref x H x W
+        reprojectDep = reprojectDep.sum(dim=2) # B x V_ref x H x W
+        reprojectDep = reprojectDep / (geo_mask_sum + self.eps)
+
+        return reprojectDep, geo_mask_sum > self.view_thre
