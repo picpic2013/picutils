@@ -264,6 +264,6 @@ def enhancedBatchWarping(refCam: List[MyPerspectiveCamera], # len(refCam) : B
 
     grid = grid.view(B * N * NP, H, W, 2)
 
-    warppedImg = myEnhancedGridSample(srcImgs.unsqueeze(2).expand(-1, -1, NP, -1, -1, -1).view(B * N * NP, C, HS, WS), grid)
+    warppedImg = myEnhancedGridSample(srcImgs.unsqueeze(2).expand(-1, -1, NP, -1, -1, -1).reshape(B * N * NP, C, HS, WS), grid)
 
     return warppedImg.view(B, N, NP, C, H, W)
