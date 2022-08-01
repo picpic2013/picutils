@@ -239,7 +239,7 @@ def batchWarping(
         grid = grid.type(dtype)
 
     # apply gird_sample
-    warppedImg = torch.nn.functional.grid_sample(srcImgs.unsqueeze(2).expand(B, N, NP, C, HS, WS).reshape(B * N * NP, C, HS, WS), grid, mode, padding_mode, align_corners)
+    warppedImg = torch.nn.functional.grid_sample(srcImgs.unsqueeze(2).expand(-1, -1, NP, -1, -1, -1).reshape(B * N * NP, C, HS, WS), grid, mode, padding_mode, align_corners)
     
     return warppedImg.view(B, N, NP, C, H, W)
 
@@ -247,7 +247,8 @@ def enhancedBatchWarping(refCam: List[MyPerspectiveCamera], # len(refCam) : B
     srcCams: List[List[MyPerspectiveCamera]],               # len(srcCams) : B && len(srcCams[0]) : N
     refDep: torch.Tensor,                                   # [ B x n_plane x H x W ] | [ B x n_plane ]
     srcImgs: torch.Tensor,                                  # [ B x n_view x channel x Hsrc x Wsrc]
-    eps:float=1e-8):
+    eps:float=1e-8, 
+    lineParam=None):
     '''
     @param refCam:  len(refCam) : B
     @param refCam:  len(srcCams) : B && len(srcCams[0]) : N
@@ -257,12 +258,12 @@ def enhancedBatchWarping(refCam: List[MyPerspectiveCamera], # len(refCam) : B
     @returns warpped src img (ref_hat) [ B x N x n_plane x C x H x W ]
     '''
 
-    grid = getWarppingGrid(refCam, srcCams, refDep, srcImgs, eps)
+    grid = getWarppingGrid(refCam, srcCams, refDep, srcImgs, eps, lineParam)
     B, N, NP, H, W, _ = grid.shape
     _, _, C, HS, WS = srcImgs.shape
 
     grid = grid.view(B * N * NP, H, W, 2)
 
-    warppedImg = myEnhancedGridSample(srcImgs.unsqueeze(2).expand(B, N, NP, C, HS, WS).view(B * N * NP, C, HS, WS), grid)
+    warppedImg = myEnhancedGridSample(srcImgs.unsqueeze(2).expand(-1, -1, NP, -1, -1, -1).view(B * N * NP, C, HS, WS), grid)
 
     return warppedImg.view(B, N, NP, C, H, W)
