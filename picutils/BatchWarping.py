@@ -38,10 +38,10 @@ def getWarppingLine_raw(ref_R_inv: torch.Tensor, ref_K_inv: torch.Tensor, src_R:
     KRRK = torch.bmm(srcPosture.view(B * V, 4, 4), KRRK)
     KRRK = torch.bmm(srcK.view(B * V, 4, 4), KRRK) # (B * V) x 4 x 4
 
-    refGrid = grid                                                                      # B x 2 x H x W => B x 2 x (H * W)
+    refGrid = grid                                                                      # B x 2 x (H * W)
     # (B * V) x 4 x (H * W) ,,  [ u, v, 1, 0 ]
     direction_ref = torch.zeros(B, 1, 4, HW, device=device, dtype=dtype)
-    direction_ref[:,:,:2,:] = refGrid
+    direction_ref[:,0,:2,:] = refGrid
     direction_ref[:,:,2,:] = 1
     direction_ref = direction_ref.repeat(1, V, 1, 1).view(B * V, 4, HW)
 
@@ -95,7 +95,7 @@ def getWarppingLine_multi_view_raw(R_inv: torch.Tensor, K_inv: torch.Tensor, R: 
     KRRK = torch.bmm(posture.view(B * V * V, 4, 4), KRRK)
     KRRK = torch.bmm(k.view(B * V * V, 4, 4), KRRK)
 
-    refGrid = grid.unsqueeze(0).repeat(B * V * V, 1, 1, 1).view(B * V * V, 2, HW) # BVV x 2 x H x W => BVV x 2 x (H * W)
+    refGrid = grid.unsqueeze(0).repeat(V * V, 1, 1, 1).view(B * V * V, 2, HW) # BVV x 2 x H x W => BVV x 2 x (H * W)
     # (BVV) x 4 x (HW) ,,  [ u, v, 1, 0 ]
     direction_ref = torch.zeros(B * V * V, 4, HW, device=device, dtype=dtype)
     direction_ref[:,:2,:] = refGrid
@@ -137,7 +137,7 @@ def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPers
     if normalize:
         HS = srcCams[0][0].imgH
         WS = srcCams[0][0].imgW
-        normalize_base = torch.tensor([WS, HS], dtype=dtype, device=device) * 0.5
+        normalize_base = torch.tensor([WS-1, HS-1], dtype=dtype, device=device) * 0.5
         normalize_base = normalize_base.view(1, 1, 2, 1, 1)
         basePoint_src[:,:,:2,:,:] = basePoint_src[:,:,:2,:,:] / normalize_base
         direction_src[:,:,:2,:,:] = direction_src[:,:,:2,:,:] / normalize_base
@@ -170,7 +170,7 @@ def getWarppingLine_multi_view(cams: List[List[MyPerspectiveCamera]], normalize=
     if normalize:
         HS = cams[0][0].imgH
         WS = cams[0][0].imgW
-        normalize_base = torch.tensor([WS, HS], dtype=dtype, device=device) * 0.5
+        normalize_base = torch.tensor([WS-1, HS-1], dtype=dtype, device=device) * 0.5
         normalize_base = normalize_base.view(1, 1, 1, 2, 1, 1)
         basePoint_src[:,:,:,:2,:,:] = basePoint_src[:,:,:,:2,:,:] / normalize_base
         direction_src[:,:,:,:2,:,:] = direction_src[:,:,:,:2,:,:] / normalize_base
