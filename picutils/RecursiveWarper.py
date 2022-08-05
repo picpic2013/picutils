@@ -1,5 +1,5 @@
 from typing import Callable
-from functools import reduce
+from functools import reduce, wraps
 
 def isTheSameType(last, now):
     '''
@@ -31,6 +31,7 @@ def make_recursive_func(func: Callable) -> Callable:
         for arg in zip(*args):
             yield wrapper(*arg, **kwargs)
 
+    @wraps(func)
     def wrapper(*args, **kwargs):
         eleEq, eleType = reduce(isTheSameType, args, (True, None))
         if eleEq:
@@ -68,6 +69,7 @@ def make_multi_return_recursive_func(func: Callable) -> Callable:
         for arg in zip(*args):
             yield wrapper(*arg, **kwargs)
 
+    @wraps(func)
     def wrapper(*args, **kwargs):
         eleEq, eleType = reduce(isTheSameType, args, (True, None))
         if eleEq:
