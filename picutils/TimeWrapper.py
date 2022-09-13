@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Union
 
 class PICTimerWith:
     def __init__(self, name=None, showTimeWhenRunning=False, autoStart=False) -> None:
@@ -111,13 +111,17 @@ class PICTimerWith:
         self.__subTimers.append(subTimer)
         return subTimer
 
+def makePICTimerWrapper(func) -> Union[Callable, PICTimer]:
+    return func
+
+@makePICTimerWrapper
 class PICTimer:
     def __init__(self, func: Callable) -> None:
         self.func = func
 
     def call(self, *args: Any, **kwargs: Any) -> Any:
         assert self.func is not None, 'function is None'
-        
+
         with PICTimer.getTimer(self.func.__name__):
             res = self.func(*args, **kwargs)
         return res
@@ -125,6 +129,7 @@ class PICTimer:
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         return self.call(*args, **kwds)
 
+    @staticmethod
     def getTimer(name=None, showTimeWhenRunning=False, autoStart=False) -> PICTimerWith:
         return PICTimerWith(name, showTimeWhenRunning=showTimeWhenRunning, autoStart=autoStart)
 
