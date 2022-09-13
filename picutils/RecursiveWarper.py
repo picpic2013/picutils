@@ -1,5 +1,6 @@
 from typing import Callable
 from functools import reduce, wraps
+from picutils.utils import decohints
 
 def isTheSameType(last, now):
     '''
@@ -13,6 +14,7 @@ def isTheSameType(last, now):
     lastRes, lastType = last
     return (lastType is None or (lastRes and (lastType == type(now))), type(now))
 
+@decohints
 def make_recursive_func(func: Callable) -> Callable:
     """Convert a function into recursive style to handle nested dict/list/tuple variables
 
@@ -49,6 +51,7 @@ def make_recursive_func(func: Callable) -> Callable:
         return func(*args, **kwargs)
     return wrapper
 
+@decohints
 def make_multi_return_recursive_func(func: Callable) -> Callable:
     """Convert a function into recursive style to handle nested dict/list/tuple variables
     that returns multiple results
