@@ -1,6 +1,8 @@
 from typing import Callable
 from functools import reduce, wraps
-from picutils.utils import decohints
+
+def decohints(decorator: Callable) -> Callable:
+    return decorator
 
 def isTheSameType(last, now):
     '''

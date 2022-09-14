@@ -5,9 +5,6 @@ from typing import Callable
 
 from picutils.RecursiveWarper import make_multi_return_recursive_func, make_recursive_func
 
-def decohints(decorator: Callable) -> Callable:
-    return decorator
-
 def angle2Rad(angle):
     return angle / 180 * math.pi
 def rad2Angle(rad):
