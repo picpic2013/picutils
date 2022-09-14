@@ -185,12 +185,11 @@ def getWarppingLine_multi_view(cams: List[List[MyPerspectiveCamera]], normalize=
 def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
     srcCams: List[List[MyPerspectiveCamera]],           # len(srcCams) : B && len(srcCams[0]) : N
     refDep: torch.Tensor,                               # [ B x n_plane x H x W ] | [ B x n_plane ]
-    srcImgs: torch.Tensor,                              # [ B x n_view x channel x Hsrc x Wsrc]
     eps:float=1e-8, 
     lineParam=None):
     '''
     @param refCam:  len(refCam) : B
-    @param refCam:  len(srcCams) : B && len(srcCams[0]) : N
+    @param srcCams: len(srcCams) : B && len(srcCams[0]) : N
     @param refDep:  [ B x n_plane x H x W ] | [ B x n_plane ]
     @param srcImgs: [ B x n_view x channel x Hsrc x Wsrc]
 
@@ -237,7 +236,7 @@ def batchWarping(
     @returns warpped src img (ref_hat) [ B x N x n_plane x C x H x W ]
     '''
 
-    grid = getWarppingGrid(refCam, srcCams, refDep, srcImgs, eps, lineParam)
+    grid = getWarppingGrid(refCam, srcCams, refDep, eps, lineParam)
     B, N, NP, H, W, _ = grid.shape
     _, _, C, HS, WS = srcImgs.shape
     dtype = refDep.dtype
@@ -266,7 +265,7 @@ def enhancedBatchWarping(refCam: List[MyPerspectiveCamera], # len(refCam) : B
     @returns warpped src img (ref_hat) [ B x N x n_plane x C x H x W ]
     '''
 
-    grid = getWarppingGrid(refCam, srcCams, refDep, srcImgs, eps, lineParam)
+    grid = getWarppingGrid(refCam, srcCams, refDep, eps, lineParam)
     B, N, NP, H, W, _ = grid.shape
     _, _, C, HS, WS = srcImgs.shape
 
