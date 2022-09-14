@@ -138,10 +138,11 @@ def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPers
     if normalize:
         HS = srcCams[0][0].imgH
         WS = srcCams[0][0].imgW
-        normalize_base = torch.tensor([WS-1, HS-1], dtype=dtype, device=device)
-        normalize_base = normalize_base.view(1, 1, 2, 1, 1)
-        basePoint_src[:,:,:2,:,:] = basePoint_src[:,:,:2,:,:] / normalize_base
-        direction_src[:,:,:2,:,:] = direction_src[:,:,:2,:,:] / normalize_base
+
+        basePoint_src[:,:,0,:,:] = basePoint_src[:,:,0,:,:] / (WS - 1)
+        basePoint_src[:,:,1,:,:] = basePoint_src[:,:,1,:,:] / (HS - 1)
+        direction_src[:,:,0,:,:] = direction_src[:,:,0,:,:] / (WS - 1)
+        direction_src[:,:,1,:,:] = direction_src[:,:,1,:,:] / (HS - 1)
 
     return basePoint_src, direction_src
 
@@ -172,10 +173,11 @@ def getWarppingLine_multi_view(cams: List[List[MyPerspectiveCamera]], normalize=
     if normalize:
         HS = cams[0][0].imgH
         WS = cams[0][0].imgW
-        normalize_base = torch.tensor([WS-1, HS-1], dtype=dtype, device=device)
-        normalize_base = normalize_base.view(1, 1, 1, 2, 1, 1)
-        basePoint_src[:,:,:,:2,:,:] = basePoint_src[:,:,:,:2,:,:] / normalize_base
-        direction_src[:,:,:,:2,:,:] = direction_src[:,:,:,:2,:,:] / normalize_base
+
+        basePoint_src[:,:,:,0,:,:] = basePoint_src[:,:,:,0,:,:] / (WS - 1)
+        basePoint_src[:,:,:,1,:,:] = basePoint_src[:,:,:,1,:,:] / (HS - 1)
+        direction_src[:,:,:,0,:,:] = direction_src[:,:,:,0,:,:] / (WS - 1)
+        direction_src[:,:,:,1,:,:] = direction_src[:,:,:,1,:,:] / (HS - 1)
 
     return basePoint_src, direction_src
 
