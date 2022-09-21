@@ -115,7 +115,7 @@ def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPers
     '''
     @param normalize: if true, return value /= 0.5([WS, HS])
     @return basePoint_src, direction_src [B x V x 3 x H x W] 
-    (if normalize, basePoint_src and direction_src are * / [HS HW])
+    (if normalize, basePoint_src and direction_src are * / ([HS-1 HW-1]*0.5))
     '''
     B = len(refCam)
     V = len(srcCams[0])
@@ -139,10 +139,10 @@ def getWarppingLine(refCam: List[MyPerspectiveCamera], srcCams: List[List[MyPers
         HS = srcCams[0][0].imgH
         WS = srcCams[0][0].imgW
 
-        basePoint_src[:,:,0,:,:] = basePoint_src[:,:,0,:,:] / (WS - 1)
-        basePoint_src[:,:,1,:,:] = basePoint_src[:,:,1,:,:] / (HS - 1)
-        direction_src[:,:,0,:,:] = direction_src[:,:,0,:,:] / (WS - 1)
-        direction_src[:,:,1,:,:] = direction_src[:,:,1,:,:] / (HS - 1)
+        basePoint_src[:,:,0,:,:] = basePoint_src[:,:,0,:,:] / ((WS - 1) * 0.5)
+        basePoint_src[:,:,1,:,:] = basePoint_src[:,:,1,:,:] / ((HS - 1) * 0.5)
+        direction_src[:,:,0,:,:] = direction_src[:,:,0,:,:] / ((WS - 1) * 0.5)
+        direction_src[:,:,1,:,:] = direction_src[:,:,1,:,:] / ((HS - 1) * 0.5)
 
     return basePoint_src, direction_src
 
@@ -150,7 +150,7 @@ def getWarppingLine_multi_view(cams: List[List[MyPerspectiveCamera]], normalize=
     '''
     @param normalize: if true, return value /= 0.5([WS, HS])
     @return basePoint_src, direction_src [B x V x V x 3 x H x W]
-    (if normalize, basePoint_src and direction_src are * / [HS HW])
+    (if normalize, basePoint_src and direction_src are * / ([HS-1 HW-1]*0.5))
     '''
     B = len(cams)
     V = len(cams[0])
@@ -174,10 +174,10 @@ def getWarppingLine_multi_view(cams: List[List[MyPerspectiveCamera]], normalize=
         HS = cams[0][0].imgH
         WS = cams[0][0].imgW
 
-        basePoint_src[:,:,:,0,:,:] = basePoint_src[:,:,:,0,:,:] / (WS - 1)
-        basePoint_src[:,:,:,1,:,:] = basePoint_src[:,:,:,1,:,:] / (HS - 1)
-        direction_src[:,:,:,0,:,:] = direction_src[:,:,:,0,:,:] / (WS - 1)
-        direction_src[:,:,:,1,:,:] = direction_src[:,:,:,1,:,:] / (HS - 1)
+        basePoint_src[:,:,:,0,:,:] = basePoint_src[:,:,:,0,:,:] / ((WS - 1) * 0.5)
+        basePoint_src[:,:,:,1,:,:] = basePoint_src[:,:,:,1,:,:] / ((HS - 1) * 0.5)
+        direction_src[:,:,:,0,:,:] = direction_src[:,:,:,0,:,:] / ((WS - 1) * 0.5)
+        direction_src[:,:,:,1,:,:] = direction_src[:,:,:,1,:,:] / ((HS - 1) * 0.5)
 
     return basePoint_src, direction_src
 
@@ -203,9 +203,6 @@ def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
         basePoint_src, direction_src = getWarppingLine(refCam, srcCams, normalize=True)
     else:
         basePoint_src, direction_src = lineParam
-
-    basePoint_src = basePoint_src * 2
-    direction_src = direction_src * 2
 
     B, V, _, H, W = basePoint_src.shape
     D = refDep.size(1)

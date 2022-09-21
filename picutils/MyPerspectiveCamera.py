@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Tuple, Dict
 
 import torch
 import numpy as np
@@ -9,6 +10,26 @@ from picutils.MyPosture import MyPosture
 from picutils.utils import picDefaultDeviceAndDtype, addOnesToVect, batchSqueeze, batchUnsqueeze
 
 class MyPerspectiveCamera:
+    
+    _uvDict: Dict[Tuple, torch.Tensor] = {}
+
+    @property
+    def uvDict(self) -> Dict[Tuple, torch.Tensor]:
+        return MyPerspectiveCamera._uvDict
+    @uvDict.setter
+    def uvDict(self, dic):
+        MyPerspectiveCamera._uvDict = dic
+
+    def getUVGrid(self, imgH, imgW, device, dtype):
+        if (int(imgH), int(imgW), device, dtype) not in MyPerspectiveCamera._uvDict.keys():
+            u, v = np.meshgrid(np.arange(0, imgW), np.arange(0, imgH))
+            u, v = torch.from_numpy(u).to(device).type(dtype), torch.from_numpy(v).to(device).type(dtype)
+            uvs = torch.stack([u, v])
+            uvs.requires_grad = False
+            MyPerspectiveCamera._uvDict.setdefault((int(imgH), int(imgW), device, dtype), uvs)
+        uvs = MyPerspectiveCamera._uvDict[(int(imgH), int(imgW), device, dtype)]
+        return uvs
+
     def __init__(self, k, posture_world2cam, imgH, imgW, resize=None, dtype=None, device=None, requires_grad=False):
         '''
         k: [[fx,  s, x0], 
@@ -59,9 +80,10 @@ class MyPerspectiveCamera:
         except:
             print('posture is Singular matrix')
 
-        u, v = np.meshgrid(np.arange(0, self.imgW), np.arange(0, self.imgH))
-        u, v = torch.from_numpy(u).to(device).type(torch.float32), torch.from_numpy(v).to(device).type(torch.float32)
-        uvs = torch.stack([u, v])
+        # u, v = np.meshgrid(np.arange(0, self.imgW), np.arange(0, self.imgH))
+        # u, v = torch.from_numpy(u).to(device).type(torch.float32), torch.from_numpy(v).to(device).type(torch.float32)
+        # uvs = torch.stack([u, v])
+        uvs = self.getUVGrid(self.imgH, self.imgW, device, dtype)
         
         self.uv_grid = uvs
         self.k = self.k.type(dtype=dtype).to(device)
@@ -69,7 +91,7 @@ class MyPerspectiveCamera:
         self.posture = self.posture.type(dtype=dtype).to(device)
         self.posture_inv = self.posture_inv.type(dtype=dtype).to(device)
 
-        self.uv_grid.requires_grad = False
+        # self.uv_grid.requires_grad = False
         self.k.requires_grad = requires_grad
         self.k_inv.requires_grad = requires_grad
         self.posture.requires_grad = requires_grad
