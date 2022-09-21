@@ -99,7 +99,7 @@ class ConsistancyChecker:
         # construct info
         B, V, H, W = dMaps.shape
         device = dMaps.device
-        dtype = dMaps.dtype
+        dtype = cams[0][0].posture.dtype
 
         # construct util vectors
         oneTensor = torch.ones(B * V, 1, H * W, dtype=dtype, device=device)       # (B * V) x 1 x (H * W)
@@ -154,6 +154,7 @@ class ConsistancyChecker:
 
         # calculate grid
         grid_norm = src_XYZ_picture / normalize_base.view(1, 1, 1, 2).expand(B * V * V, H, W, 2) - 1.     # (B * V_src * V_ref) x H x W x 2
+        grid_norm = grid_norm.float()
 
         src_dMaps = torch.nn.functional.grid_sample(
             dMaps.view(B, 1, V, 1, H, W).repeat(1, V, 1, 1, 1, 1).view(B * V * V, 1, H, W), 
