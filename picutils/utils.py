@@ -39,7 +39,7 @@ def picDefaultDeviceAndDtype(device=None, dtype=None, defaultDevice=None, defaul
     if defaultDevice is None:
         defaultDevice = 'cpu'
     if defaultDtype is None:
-        defaultDtype = torch.float64
+        defaultDtype = torch.float32
 
     if device is None:
         device = defaultDevice
