@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from plyfile import PlyData, PlyElement
-from typing import List, Tuple
+from typing import Tuple
 
 from picutils.RecursiveWarper import make_multi_return_recursive_func
 from picutils.MyPerspectiveCamera import MyPerspectiveCamera

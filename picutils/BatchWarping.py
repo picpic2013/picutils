@@ -190,10 +190,10 @@ def getWarppingGrid(refCam: List[MyPerspectiveCamera],  # len(refCam) : B
     '''
     @param refCam:  len(refCam) : B
     @param srcCams: len(srcCams) : B && len(srcCams[0]) : N
-    @param refDep:  [ B x n_plane x H x W ] | [ B x n_plane ]
-    @param srcImgs: [ B x n_view x channel x Hsrc x Wsrc]
+    @param refDep:  [ B x D x H x W ] | [ B x D ]
+    @param srcImgs: [ B x V x C x Hsrc x Wsrc]
 
-    @returns warpped src grid (ref_hat) [ B, N, NP, H, W, 2 ]
+    @returns warpped src grid (ref_hat) [ B, V, D, H, W, 2 ] (u,v) [-1, 1)
     '''
     if len(refDep.shape) == 2:
         refDep = refDep.unsqueeze(2).unsqueeze(2)
@@ -229,11 +229,11 @@ def batchWarping(
     lineParam=None):
     '''
     @param refCam:  len(refCam) : B
-    @param refCam:  len(srcCams) : B && len(srcCams[0]) : N
-    @param refDep:  [ B x n_plane x H x W ] | [ B x n_plane ]
-    @param srcImgs: [ B x n_view x channel x Hsrc x Wsrc]
+    @param srcCam:  len(srcCams) : B && len(srcCams[0]) : V
+    @param refDep:  [ B x D x H x W ] | [ B x D ]
+    @param srcImgs: [ B x V x C x Hsrc x Wsrc]
 
-    @returns warpped src img (ref_hat) [ B x N x n_plane x C x H x W ]
+    @returns warpped src img (ref_hat) [ B x V x D x C x H x W ]
     '''
 
     grid = getWarppingGrid(refCam, srcCams, refDep, eps, lineParam)
@@ -258,11 +258,11 @@ def enhancedBatchWarping(refCam: List[MyPerspectiveCamera], # len(refCam) : B
     lineParam=None):
     '''
     @param refCam:  len(refCam) : B
-    @param refCam:  len(srcCams) : B && len(srcCams[0]) : N
-    @param refDep:  [ B x n_plane x H x W ] | [ B x n_plane ]
-    @param srcImgs: [ B x n_view x channel x Hsrc x Wsrc]
+    @param srcCam:  len(srcCams) : B && len(srcCams[0]) : V
+    @param refDep:  [ B x D x H x W ] | [ B x D ]
+    @param srcImgs: [ B x V x C x Hsrc x Wsrc]
 
-    @returns warpped src img (ref_hat) [ B x N x n_plane x C x H x W ]
+    @returns warpped src img (ref_hat) [ B x V x D x C x H x W ]
     '''
 
     grid = getWarppingGrid(refCam, srcCams, refDep, eps, lineParam)
